@@ -14,7 +14,7 @@ from datetime import datetime
 import re
 from operator import sub,add
 import matplotlib.pyplot as plt
-
+from sklearn.metrics import precision_recall_curve
 
 
 
@@ -1932,5 +1932,512 @@ data_x_all=pd.merge(data_x_all,t2,how='left',on='register_type')
 data_x_all=pd.merge(data_x_all,t3,how='left',on='device_type')
 
 #app_launch衍生:
+app_launch_23day=app_launch[app_launch.day<=day]
+
+app_launch_23day=app_launch_23day.sort_values(by=['user_id','day'])
+
+#首次登陆时间与注册时间相同
+first_launch=app_launch_23day.drop_duplicates(subset='user_id',keep='first').rename(columns={'day':'first_launch_day'})
+
+last_launch=app_launch_23day.drop_duplicates(subset='user_id',keep='last').rename(columns={'day':'last_launch_day'})
+
+launch_days=app_launch_23day.groupby(by='user_id')['day'].size().to_frame('launch_days').reset_index()
+
+launch_day_user=app_launch_23day.groupby('day')['user_id'].nunique().to_frame('launch_day_user').reset_index()
+
+launch_day_user.rename(columns={'day':'register_day'},inplace=True)
+
+data_x_all=pd.merge(data_x_all,last_launch,how='left',on='user_id').eval('last_launch_day_sub_register=last_launch_day-register_day')
+
+data_x_all.eval('register_cnt=%s-register_day' %day,inplace=True)
+
+data_x_all['register_cnt']=data_x_all['register_cnt']+1
+
+data_x_all=pd.merge(data_x_all,launch_days,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,launch_day_user,how='left',on='register_day')
+
+data_x_all.eval('avg_launch_day=launch_days/register_cnt',inplace=True)
+
+data_x_all.eval('register_sub_launch=register_cnt-launch_days',inplace=True)
+
+
+#拍摄日志变量衍生
+video_create_23day=video_create[video_create.day<=23]
+
+video_create_23day=video_create_23day.sort_values(by=['user_id','day'])
+
+first_video=video_create_23day.drop_duplicates(subset='user_id',keep='first').rename(columns={'day':'first_video_day'})
+
+last_video=video_create_23day.drop_duplicates(subset='user_id',keep='last').rename(columns={'day':'last_video_day'})
+
+video_days=video_create_23day.groupby(by=['user_id'])['day'].nunique().to_frame('video_days').reset_index()
+
+video_frequency=video_create_23day.groupby(by=['user_id','day']).size().to_frame('video_frequency').reset_index()
+
+video_frequency_total=video_frequency.groupby(by=['user_id'])['video_frequency'].sum(axis=1).to_frame('video_frequency_total').reset_index()
+
+video_frequency_max=video_frequency.groupby(by=['user_id'])['video_frequency'].max(axis=1).to_frame('video_frequency_max').reset_index()
+
+video_frequency_min=video_frequency.groupby(by=['user_id'])['video_frequency'].min(axis=1).to_frame('video_frequency_min').reset_index()
+
+video_frequency_avg=video_frequency.groupby(by=['user_id'])['video_frequency'].mean().to_frame('video_frequency_avg').reset_index()
+
+video_frequency_std=video_frequency.groupby(by=['user_id'])['video_frequency'].std(ddof=1).to_frame('video_frequency_std').reset_index()
+
+video_day_user=video_create_23day.groupby(by='day')['user_id'].nunique().to_frame('video_day_user').reset_index().rename(columns={'day':'register_day'})
+
+video_day_frequency=video_create_23day.groupby(by='day')['user_id'].count().to_frame('video_day_frequency').reset_index().rename(columns={'day':'register_day'})
+
+data_x_all=pd.merge(data_x_all,first_video,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,last_video,how='left',on='user_id')
+
+data_x_all.eval('first_video_day_sub_register=first_video_day-register_day',inplace=True)
+
+data_x_all.eval('last_video_day_sub_register=last_video_day-register_day',inplace=True)
+
+data_x_all=pd.merge(data_x_all,video_days,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,video_frequency_avg,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,video_frequency_max,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,video_frequency_min,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,video_frequency_std,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,video_frequency_total,how='left',on='user_id')
+
+data_x_all.eval('avg_video_day=video_days/register_cnt',inplace=True)
+
+data_x_all.eval('register_sub_video=register_cnt-video_days',inplace=True)
+
+data_x_all.eval('register_sub_video=launch_days-video_days',inplace=True)
+
+data_x_all=pd.merge(data_x_all,video_day_user,how='left',on='register_day')
+
+data_x_all=pd.merge(data_x_all,video_day_frequency,how='left',on='register_day')
+
+data_x_all.eval('last_video_sub_frist_video=last_video_day-video_days',inplace=True)
+
+#活跃用户衍生:
+
+user_activity_23day=user_activity[user_activity.day<=day]
+#先排序
+user_activity_23day=user_activity_23day.sort_values(by=['user_id','day'])
+#首次活跃时间
+first_activity=user_activity_23day.drop_duplicates(subset='user_id',keep='first')[['user_id','day']].rename(columns={'day':'first_activity_day'})
+#最后活跃时间(last_activity_day)
+last_activity=user_activity_23day.drop_duplicates(subset='user_id',keep='last')[['user_id','day']].rename(columns={'day':'last_activity_day'})
+#活跃天数(activity_days)
+activity_days=user_activity_23day.groupby(by=['user_id'])['day'].nunique().to_frame('activity_days').reset_index()
+#活跃次数：（max,min,sum,avg,std）
+activity_frequency=user_activity_23day.groupby(by=['user_id','day']).size().to_frame('activity_frequency').reset_index()
+#total
+activity_frequency_total=activity_frequency.groupby(by=['user_id'])['activity_frequency'].sum(axis=1).to_frame('activity_frequency_total').reset_index()
+#max
+activity_frequency_max=activity_frequency.groupby(by=['user_id'])['activity_frequency'].max(axis=1).to_frame('activity_frequency_max').reset_index()
+#min
+activity_frequency_min=activity_frequency.groupby(by=['user_id'])['activity_frequency'].min(axis=1).to_frame('activity_frequency_min').reset_index()
+#mean
+activity_frequency_avg=activity_frequency.groupby(by=['user_id'])['activity_frequency'].mean().to_frame('activity_frequency_avg').reset_index()
+#std
+activity_frequency_std=activity_frequency.groupby(by=['user_id'])['activity_frequency'].std(ddof=1).to_frame('activity_frequency_std').reset_index()
+#每天活跃人数(activity_day_user)
+activity_day_user=user_activity_23day.groupby(by='day')['user_id'].nunique().to_frame('activity_day_user').reset_index().rename(columns={'day':'register_day'})
+#每天活跃次数(activity_day_frequency)
+activity_day_frequency=user_activity_23day.groupby(by='day')['user_id'].count().to_frame('activity_day_frequency').reset_index().rename(columns={'day':'register_day'})
+
+data_x_all=pd.merge(data_x_all,first_activity,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,last_activity,how='left',on='user_id')
+#首次活跃时间与注册时间差(first_activity_day_sub_register)
+data_x_all.eval('first_activity_day_sub_register=first_activity_day-register_day',inplace=True)
+#最后活跃时间与注册时间差(last_activity_day_sub_register)
+data_x_all.eval('last_activity_day_sub_register=last_activity_day-register_day',inplace=True)
+
+data_x_all=pd.merge(data_x_all,activity_days,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,activity_frequency_avg,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,activity_frequency_max,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,activity_frequency_min,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,activity_frequency_std,how='left',on='user_id')
+
+data_x_all=pd.merge(data_x_all,activity_frequency_total,how='left',on='user_id')
+#平均活跃天数（活跃天数与注册天数占比）(avg_activity_day)
+data_x_all.eval('avg_activity_day=activity_days/register_cnt',inplace=True)
+#注册天数与活跃天数差(register_sub_activity)
+data_x_all.eval('register_sub_activity=register_cnt-activity_days',inplace=True)
+#登录天数与活跃天数差(launch_sub_activity)
+data_x_all.eval('register_sub_activity=launch_days-activity_days',inplace=True)
+#活跃天数与拍摄天数差
+data_x_all.eval('activity_sub_video=activity_days-video_days',inplace=True)
+
+data_x_all=pd.merge(data_x_all,activity_day_user,how='left',on='register_day')
+
+data_x_all=pd.merge(data_x_all,activity_day_frequency,how='left',on='register_day')
+#最后活跃时间与首次活跃时间差(last_ activity _sub_frist_ activity)
+data_x_all.eval('last_activity_sub_frist_activity=last_activity_day-activity_days',inplace=True)
+
+
+#用户点击的不同页面数,用户播放不同video数,用户关注不同作者数,用户不同行为类型数
+activity_user_cnt=user_activity_23day.groupby(by=['user_id'])[['page','video_id','author_id','action_type']].nunique().reset_index().\
+rename(columns={'page':'user_page_cnt','video_id':'user_video_cnt','author_id':'user_author_cnt','action_type':'user_action_cnt'})
+
+#用户在每个页面点击的次数
+user_page_frequency=user_activity_23day.groupby(by=['user_id','page']).size().unstack(1).rename(columns=lambda x:'page'+str(x)+'_frequency')
+user_page_frequency.columns.name=None
+user_page_frequency=user_page_frequency.reset_index()
+#用户在每个页面活跃的天数
+user_page_day=user_activity_23day.groupby(by=['user_id','page'])['day'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_day')
+user_page_day.columns.name=None
+user_page_day=user_page_day.reset_index()
+#用户在每个页面播放不同的视频数
+user_page_video=user_activity_23day.groupby(by=['user_id','page'])['video_id'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_video')
+user_page_video.columns.name=None
+user_page_video=user_page_video.reset_index()
+#用户在每个页面关注不同的作者数
+user_page_author=user_activity_23day.groupby(by=['user_id','page'])['author_id'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_author')
+user_page_author.columns.name=None
+user_page_author=user_page_author.reset_index()
+#用户在每个页面不同的行为类型数
+user_page_action=user_activity_23day.groupby(by=['user_id','page'])['action_type'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_action')
+user_page_action.columns.name=None
+user_page_action=user_page_action.reset_index()
+
+#用户每个行为类型发生次数
+user_action_frequency=user_activity_23day.groupby(by=['user_id','action_type']).size().unstack(1).rename(columns=lambda x:'action'+str(x)+'_frequency')
+user_action_frequency.columns.name=None
+user_action_frequency=user_action_frequency.reset_index()
+#用户在每个行为类型活跃的天数
+user_action_day=user_activity_23day.groupby(by=['user_id','action_type'])['day'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_day')
+user_action_day.columns.name=None
+user_action_day=user_action_day.reset_index()
+#用户在每个行为类型播放不同的视频数
+user_action_video=user_activity_23day.groupby(by=['user_id','action_type'])['video_id'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_video')
+user_action_video.columns.name=None
+user_action_video=user_action_video.reset_index()
+#用户在每个行为类型关注不同的作者数
+user_action_author=user_activity_23day.groupby(by=['user_id','action_type'])['author_id'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_author')
+user_action_author.columns.name=None
+user_action_author=user_action_author.reset_index()
+#用户在每个行为类型发生的不同页面数
+user_action_page=user_activity_23day.groupby(by=['user_id','action_type'])['page'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_page')
+user_action_page.columns.name=None
+user_action_page=user_action_page.reset_index()
+for merge in [activity_user_cnt,user_page_frequency,user_page_day,user_page_video,user_page_author,user_page_action,\
+user_action_frequency,user_action_day,user_action_video,user_action_author,user_action_page]:
+    data_x_all=pd.merge(data_x_all,merge,how='left',on='user_id')
+
+'''下面的实现不了,维度太大
+#每个视频被播放的人数
+acti_video_user=user_activity_23day.groupby(by='video_id')['user_id'].nunique().to_frame('acti_video_user').reset_index()
+#每个视频被播放的次数
+acti_video_frequency=user_activity_23day.groupby(by='video_id')['user_id'].size().to_frame('acti_video_frequency').reset_index()
+#每个作者被关注的人数
+acti_author_user=user_activity_23day.groupby(by='author_id')['user_id'].nunique().to_frame('acti_author_user').reset_index()
+#每个作者被关注的次数
+acti_author_frequency=user_activity_23day.groupby(by='author_id')['user_id'].size().to_frame('acti_author_frequency').reset_index()
+
+#  5个行为页面分别点击的人数
+page_user=user_activity_23day.groupby(by='page')['user_id'].nunique().to_frame('page_user').reset_index()
+#  5个行为页面分别点击的次数
+page_frequency=user_activity_23day.groupby(by='page')['user_id'].size().to_frame('page_frequency').reset_index()
+#  6个行为类型分别点击的人数
+action_user=user_activity_23day.groupby(by='action_type')['user_id'].nunique().to_frame('action_user').reset_index()
+#  6个行为类型分别点击的次数
+action_frequency=user_activity_23day.groupby(by='action_type')['user_id'].size().to_frame('action_frequency').reset_index()
+'''
+#合并数据:
+
+#define f1_score
+def f1_score(y_true,y_pred):
+    eval_name='f1_score'
+    precision,recall,threshold =precision_recall_curve(y_true,y_pred)
+    f1_list=(2*precision*recall)/(precision+recall)
+    max_index=np.argmax(f1_list)
+    print 'threshold--->',threshold[max_index]
+    f1=np.max(f1_list)
+    return eval_name,f1,True
+
+#提取label
+def get_label_data(app_launch_,video_create_,user_activity_):
+    app_launch_lable=app_launch_.drop_duplicates(subset=['user_id','day'])
+    video_create_label=video_create_.drop_duplicates(subset=['user_id','day'])
+    user_activity_label=user_activity_.drop_duplicates(subset=['user_id','day'])[['user_id','day']]
+    data_label=pd.concat([app_launch_lable,video_create_label])
+    data_label=pd.concat([data_label,user_activity_label])
+    data_label=data_label.drop_duplicates(subset=['user_id','day'])
+    return data_label
+
+class Get_data_launched_record(object):
+    #register_data:data_frame
+    #label_data:data_frame
+    def __init__(self,data_register,data_label,split_day=23,merge_day=7,label_count_day=7):
+        self._data_register=data_register
+        self._data_label=data_label.set_index('user_id')
+        self._split_day=split_day
+        self._merge_day=merge_day
+        self._label_count_day=label_count_day
+        self._register_people_af_split=data_register[data_register.register_day>split_day].user_id.unique()
+        self._register_people_cnt_af_split=data_register[data_register.register_day>split_day].user_id.nunique()
+    #plot graph
+    def _plot_people_cnt(self,x):
+        plot_x=np.arange(len(x.index))
+        plot_y=x['cnt'].values
+        plt.figure(figsize=(20,1))
+        plt.bar(plot_x,plot_y)
+        plt.xticks(plot_x,x.index)
+        plt.xlabel('day')
+        plt.ylabel('people_cnt')
+        for i,j in zip(plot_x,plot_y):
+            plt.text(i,j,'%.0f'%j,ha='center', va= 'bottom',fontsize=10)
+        plt.show()
+    #merget register information
+    def _merge_data_register(self):
+        register_bins=list(range(1,self._split_day+1))[::-self._merge_day][::-1]
+        register_bins.insert(0,0)
+        register_cut=pd.cut(self._data_register['register_day'],register_bins)
+        register_people=self._data_register.groupby(by=register_cut)['user_id'].unique().to_frame('register_people').reset_index()
+        self._register_people=register_people
+        self._register_bins=register_bins
+        self._register_cut=register_cut
+    #calculate the number of people of forecast
+    def _count_data_label(self):
+        for ind in range(self._register_people.shape[0]):
+            register_people_index=self._register_people.register_people.iloc[ind]
+            data_label_index=self._data_label.loc[register_people_index].reset_index()
+            label_count_bins=range(self._register_bins[ind+1],30)
+            label_count_bins=label_count_bins[::self._label_count_day]
+            label_count_bins.insert(len(label_count_bins),30)
+            self._label_count_bins=label_count_bins
+            data_label_index_cut=pd.cut(data_label_index.day,label_count_bins)
+            data_label_index_cnt=data_label_index.groupby(by=data_label_index_cut)['user_id'].nunique()\
+            .to_frame('cnt').reset_index()
+            data_label_index_cnt.loc[-1]=[str(self._register_people['register_day'][ind]),self._register_people['register_people'][ind].shape[0]]
+            data_label_index_cnt.index=data_label_index_cnt.index+1
+            data_label_index_cnt.sort_index(inplace=True)
+            data_label_index_cnt.set_index('day',inplace=True)
+            #self._data_label_index_cnt=data_label_index_cnt
+            self._plot_people_cnt(data_label_index_cnt)
+    # to get labeled people
+    def get_label_people(self,start_day,end_day,count_day=7):
+        source_people=self._data_register[(self._data_register.register_day>=start_day) & \
+        (self._data_register.register_day<=end_day)]['user_id'].values
+        target_people=self._data_label.loc[source_people].reset_index()
+        target_bins=range(end_day,30)
+        target_bins=target_bins[::count_day]
+        target_bins.insert(len(target_bins),30)
+        self._label_people_bins=target_bins
+        target_cuts=pd.cut(target_people.day,target_bins)
+        label_people=target_people.groupby(by=target_cuts)['user_id'].unique().to_frame('label_people').reset_index()
+        self.label_people=label_people
+    #plot launch trend
+    def plot_trend(self):
+        self._merge_data_register()
+        self._count_data_label()
+
+
+class Get_data_feature(object):
+    '''
+    ps:forcast_week:提前预测的周,比如我要预测这周的客户在接下来一周还会不会登录,则为1
+    如果要预测这周的客户在接下来2周还会不会登录,则取值为2
+    如果 forcast_week=0,证明提取正常的特征,也就是预测特征
+    '''
+    def __init__(self,register_data,app_launch_data,video_create_data,user_activity_data,start_day=1,end_day=23,forcast_week=1):
+        self._register_data=register_data
+        self._app_launch_data=app_launch_data
+        self._video_create_data=video_create_data
+        self._user_activity_data=user_activity_data
+        self._start_day=start_day
+        self._end_day=end_day
+        self._forcast_week=forcast_week
+        self.shiff_day=(37-forcast_week*7-end_day) if forcast_week !=0 else 0
+        self.add_fea_day=(forcast_week-1)*7 if forcast_week !=0 else  30-end_day
+
+    def _get_register_feature(self):
+        user_register_nday=self._register_data[(self._register_data.register_day>=self._start_day)&(self._register_data.register_day<=self._end_day)]
+        user_register_nday.register_day=user_register_nday.register_day+self.shiff_day
+        #register_day_user_id
+
+        t1=user_register_nday.groupby(by='register_day')['user_id'].nunique().to_frame('register_day_user_id').reset_index()
+        #register_type_user_id
+        t2=user_register_nday.groupby(by='register_type')['user_id'].nunique().to_frame('register_type_user_id').reset_index()
+        #device_type_user_id
+        t3=user_register_nday.groupby(by='device_type')['user_id'].nunique().to_frame('device_type_user_id').reset_index()
+        #merget
+        self.data_x_all=user_register_nday[['user_id','register_day','register_type','device_type']]
+        self.data_x_all=pd.merge(self.data_x_all,t1,how='left',on='register_day')
+        self.data_x_all=pd.merge(self.data_x_all,t2,how='left',on='register_type')
+        self.data_x_all=pd.merge(self.data_x_all,t3,how='left',on='device_type')
+
+    def _get_app_launch_feature(self):
+        app_launch_nday=self._app_launch_data[(self._app_launch_data.day>=self._start_day)&(self._app_launch_data.day<=(self._end_day+self.add_fea_day))]
+        app_launch_nday.day=app_launch_nday.day+self.shiff_day
+        app_launch_nday=app_launch_nday.sort_values(by=['user_id','day'])
+        #首次登陆时间与注册时间相同
+        #first_launch=app_launch_nday.drop_duplicates(subset='user_id',keep='first').rename(columns={'day':'first_launch_day'})
+        last_launch=app_launch_nday.drop_duplicates(subset='user_id',keep='last').rename(columns={'day':'last_launch_day'})
+        launch_days=app_launch_nday.groupby(by='user_id')['day'].size().to_frame('launch_days').reset_index()
+        launch_day_user=app_launch_nday.groupby('day')['user_id'].nunique().to_frame('launch_day_user').reset_index()
+        launch_day_user.rename(columns={'day':'register_day'},inplace=True)
+        self.data_x_all=pd.merge(self.data_x_all,last_launch,how='left',on='user_id').eval('last_launch_day_sub_register=last_launch_day-register_day')
+        self.data_x_all.eval('register_cnt=%s -register_day' % 31,inplace=True)
+        self.data_x_all=pd.merge(self.data_x_all,launch_days,how='left',on='user_id')
+        self.data_x_all=pd.merge(self.data_x_all,launch_day_user,how='left',on='register_day')
+        self.data_x_all.eval('avg_launch_day=launch_days/register_cnt',inplace=True)
+        self.data_x_all.eval('register_sub_launch=register_cnt-launch_days',inplace=True)
+
+    def _get_video_feature(self):
+        video_create_nday=self._video_create_data[(self._video_create_data.day>=self._start_day)&(self._video_create_data.day<=(self._end_day+self.add_fea_day))]
+        video_create_nday.day=video_create_nday.day+self.shiff_day
+        video_create_nday=video_create_nday.sort_values(by=['user_id','day'])
+        #拍摄日志变量衍生
+        first_video=video_create_nday.drop_duplicates(subset='user_id',keep='first').rename(columns={'day':'first_video_day'})
+        last_video=video_create_nday.drop_duplicates(subset='user_id',keep='last').rename(columns={'day':'last_video_day'})
+        video_days=video_create_nday.groupby(by=['user_id'])['day'].nunique().to_frame('video_days').reset_index()
+        video_frequency=video_create_nday.groupby(by=['user_id','day']).size().to_frame('video_frequency').reset_index()
+        video_frequency_total=video_frequency.groupby(by=['user_id'])['video_frequency'].sum(axis=1).to_frame('video_frequency_total').reset_index()
+        video_frequency_max=video_frequency.groupby(by=['user_id'])['video_frequency'].max(axis=1).to_frame('video_frequency_max').reset_index()
+        video_frequency_min=video_frequency.groupby(by=['user_id'])['video_frequency'].min(axis=1).to_frame('video_frequency_min').reset_index()
+        video_frequency_avg=video_frequency.groupby(by=['user_id'])['video_frequency'].mean().to_frame('video_frequency_avg').reset_index()
+        video_frequency_std=video_frequency.groupby(by=['user_id'])['video_frequency'].std(ddof=1).to_frame('video_frequency_std').reset_index()
+        video_day_user=video_create_nday.groupby(by='day')['user_id'].nunique().to_frame('video_day_user').reset_index().rename(columns={'day':'register_day'})
+        video_day_frequency=video_create_nday.groupby(by='day')['user_id'].count().to_frame('video_day_frequency').reset_index().rename(columns={'day':'register_day'})
+        self.data_x_all=pd.merge(self.data_x_all,first_video,how='left',on='user_id')
+        self.data_x_all=pd.merge(self.data_x_all,last_video,how='left',on='user_id')
+        self.data_x_all.eval('first_video_day_sub_register=first_video_day-register_day',inplace=True)
+        self.data_x_all.eval('last_video_day_sub_register=last_video_day-register_day',inplace=True)
+        self.data_x_all=pd.merge(self.data_x_all,video_days,how='left',on='user_id')
+        self.data_x_all=pd.merge(self.data_x_all,video_frequency_avg,how='left',on='user_id')
+        self.data_x_all=pd.merge(self.data_x_all,video_frequency_max,how='left',on='user_id')
+        self.data_x_all=pd.merge(self.data_x_all,video_frequency_min,how='left',on='user_id')
+        self.data_x_all=pd.merge(self.data_x_all,video_frequency_std,how='left',on='user_id')
+        self.data_x_all=pd.merge(self.data_x_all,video_frequency_total,how='left',on='user_id')
+        self.data_x_all.eval('avg_video_day=video_days/register_cnt',inplace=True)
+        self.data_x_all.eval('register_sub_video=register_cnt-video_days',inplace=True)
+        self.data_x_all.eval('register_sub_video=launch_days-video_days',inplace=True)
+        self.data_x_all=pd.merge(self.data_x_all,video_day_user,how='left',on='register_day')
+        self.data_x_all=pd.merge(self.data_x_all,video_day_frequency,how='left',on='register_day')
+        self.data_x_all.eval('last_video_sub_frist_video=last_video_day-video_days',inplace=True)
+
+    def _get_activity_feature(self):
+        activity_create_nday=self._user_activity_data[(self._user_activity_data.day>=self._start_day)&(self._user_activity_data.day<=(self._end_day+self.add_fea_day))]
+        activity_create_nday.day=activity_create_nday.day+self.shiff_day
+        activity_create_nday=activity_create_nday.sort_values(by=['user_id','day'])
+        #活跃用户衍生:
+        #首次活跃时间
+        first_activity=activity_create_nday.drop_duplicates(subset='user_id',keep='first')[['user_id','day']].rename(columns={'day':'first_activity_day'})
+        #最后活跃时间(last_activity_day)
+        last_activity=activity_create_nday.drop_duplicates(subset='user_id',keep='last')[['user_id','day']].rename(columns={'day':'last_activity_day'})
+        #活跃天数(activity_days)
+        activity_days=activity_create_nday.groupby(by=['user_id'])['day'].nunique().to_frame('activity_days').reset_index()
+        #活跃次数：（max,min,sum,avg,std）
+        activity_frequency=activity_create_nday.groupby(by=['user_id','day']).size().to_frame('activity_frequency').reset_index()
+        #total
+        activity_frequency_total=activity_frequency.groupby(by=['user_id'])['activity_frequency'].sum(axis=1).to_frame('activity_frequency_total').reset_index()
+        #max
+        activity_frequency_max=activity_frequency.groupby(by=['user_id'])['activity_frequency'].max(axis=1).to_frame('activity_frequency_max').reset_index()
+        #min
+        activity_frequency_min=activity_frequency.groupby(by=['user_id'])['activity_frequency'].min(axis=1).to_frame('activity_frequency_min').reset_index()
+        #mean
+        activity_frequency_avg=activity_frequency.groupby(by=['user_id'])['activity_frequency'].mean().to_frame('activity_frequency_avg').reset_index()
+        #std
+        activity_frequency_std=activity_frequency.groupby(by=['user_id'])['activity_frequency'].std(ddof=1).to_frame('activity_frequency_std').reset_index()
+        #每天活跃人数(activity_day_user)
+        activity_day_user=activity_create_nday.groupby(by='day')['user_id'].nunique().to_frame('activity_day_user').reset_index().rename(columns={'day':'register_day'})
+        #每天活跃次数(activity_day_frequency)
+        activity_day_frequency=activity_create_nday.groupby(by='day')['user_id'].count().to_frame('activity_day_frequency').reset_index().rename(columns={'day':'register_day'})
+
+        self.data_x_all=pd.merge(self.data_x_all,first_activity,how='left',on='user_id')
+
+        self.data_x_all=pd.merge(self.data_x_all,last_activity,how='left',on='user_id')
+        #首次活跃时间与注册时间差(first_activity_day_sub_register)
+        self.data_x_all.eval('first_activity_day_sub_register=first_activity_day-register_day',inplace=True)
+        #最后活跃时间与注册时间差(last_activity_day_sub_register)
+        self.data_x_all.eval('last_activity_day_sub_register=last_activity_day-register_day',inplace=True)
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_days,how='left',on='user_id')
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_frequency_avg,how='left',on='user_id')
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_frequency_max,how='left',on='user_id')
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_frequency_min,how='left',on='user_id')
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_frequency_std,how='left',on='user_id')
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_frequency_total,how='left',on='user_id')
+        #平均活跃天数（活跃天数与注册天数占比）(avg_activity_day)
+        self.data_x_all.eval('avg_activity_day=activity_days/register_cnt',inplace=True)
+        #注册天数与活跃天数差(register_sub_activity)
+        self.data_x_all.eval('register_sub_activity=register_cnt-activity_days',inplace=True)
+        #登录天数与活跃天数差(launch_sub_activity)
+        self.data_x_all.eval('register_sub_activity=launch_days-activity_days',inplace=True)
+        #活跃天数与拍摄天数差
+        self.data_x_all.eval('activity_sub_video=activity_days-video_days',inplace=True)
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_day_user,how='left',on='register_day')
+
+        self.data_x_all=pd.merge(self.data_x_all,activity_day_frequency,how='left',on='register_day')
+        #最后活跃时间与首次活跃时间差(last_ activity _sub_frist_ activity)
+        self.data_x_all.eval('last_activity_sub_frist_activity=last_activity_day-activity_days',inplace=True)
+
+        #用户点击的不同页面数,用户播放不同video数,用户关注不同作者数,用户不同行为类型数
+        activity_user_cnt=activity_create_nday.groupby(by=['user_id'])[['page','video_id','author_id','action_type']].nunique().reset_index().\
+        rename(columns={'page':'user_page_cnt','video_id':'user_video_cnt','author_id':'user_author_cnt','action_type':'user_action_cnt'})
+        #用户在每个页面点击的次数
+        user_page_frequency=activity_create_nday.groupby(by=['user_id','page']).size().unstack(1).rename(columns=lambda x:'page'+str(x)+'_frequency')
+        user_page_frequency.columns.name=None
+        user_page_frequency=user_page_frequency.reset_index()
+        #用户在每个页面活跃的天数
+        user_page_day=activity_create_nday.groupby(by=['user_id','page'])['day'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_day')
+        user_page_day.columns.name=None
+        user_page_day=user_page_day.reset_index()
+        #用户在每个页面播放不同的视频数
+        user_page_video=activity_create_nday.groupby(by=['user_id','page'])['video_id'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_video')
+        user_page_video.columns.name=None
+        user_page_video=user_page_video.reset_index()
+        #用户在每个页面关注不同的作者数
+        user_page_author=activity_create_nday.groupby(by=['user_id','page'])['author_id'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_author')
+        user_page_author.columns.name=None
+        user_page_author=user_page_author.reset_index()
+        #用户在每个页面不同的行为类型数
+        user_page_action=activity_create_nday.groupby(by=['user_id','page'])['action_type'].nunique().unstack(1).rename(columns=lambda x:'page'+str(x)+'_action')
+        user_page_action.columns.name=None
+        user_page_action=user_page_action.reset_index()
+        #用户每个行为类型发生次数
+        user_action_frequency=activity_create_nday.groupby(by=['user_id','action_type']).size().unstack(1).rename(columns=lambda x:'action'+str(x)+'_frequency')
+        user_action_frequency.columns.name=None
+        user_action_frequency=user_action_frequency.reset_index()
+        #用户在每个行为类型活跃的天数
+        user_action_day=activity_create_nday.groupby(by=['user_id','action_type'])['day'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_day')
+        user_action_day.columns.name=None
+        user_action_day=user_action_day.reset_index()
+        #用户在每个行为类型播放不同的视频数
+        user_action_video=activity_create_nday.groupby(by=['user_id','action_type'])['video_id'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_video')
+        user_action_video.columns.name=None
+        user_action_video=user_action_video.reset_index()
+        #用户在每个行为类型关注不同的作者数
+        user_action_author=activity_create_nday.groupby(by=['user_id','action_type'])['author_id'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_author')
+        user_action_author.columns.name=None
+        user_action_author=user_action_author.reset_index()
+        #用户在每个行为类型发生的不同页面数
+        user_action_page=activity_create_nday.groupby(by=['user_id','action_type'])['page'].nunique().unstack(1).rename(columns=lambda x:'action'+str(x)+'_page')
+        user_action_page.columns.name=None
+        user_action_page=user_action_page.reset_index()
+        for merge in [activity_user_cnt,user_page_frequency,user_page_day,user_page_video,user_page_author,user_page_action,\
+        user_action_frequency,user_action_day,user_action_video,user_action_author,user_action_page]:
+            self.data_x_all=pd.merge(self.data_x_all,merge,how='left',on='user_id')
+
+    def get_feature(self):
+        self._get_register_feature()
+        self._get_app_launch_feature()
+        self._get_video_feature()
+        self._get_activity_feature()
 
 
